@@ -7,9 +7,11 @@ void ConnectionHandler::handleRead() {
     
     if (bytesRead <= 0) {
         std::cout << "[Conn] Closing " << fd_ << std::endl;
+        std::cout << "[Conn] Bytes read: " << totalBytesRead_ << std::endl;
         reactor_->removeHandler(fd_);
         return;
     }
 
+    totalBytesRead_ += bytesRead;
     send(fd_, buffer, bytesRead, 0);
 };

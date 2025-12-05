@@ -15,6 +15,7 @@ class ConnectionHandler : public EventHandler {
 
     private:
         int fd_;
+        int totalBytesRead_ = 0;
         Reactor* reactor_;
 };
 
