@@ -1,37 +1,46 @@
 #include <iostream>
-
+#include <sys/socket.h> 
+#include <netinet/in.h>
+#include <fcntl.h>
+#include "AcceptorHandler.hpp"
 #include "EventHandler.hpp"
 #include "Reactor.hpp"
-
-class MockConnectionHandler : public EventHandler {
-    public:
-        MockConnectionHandler(int id, std::string name) : id_{id}, name_(std::move(name)) {}
-
-        int getHandle() const override { return id_; }
-
-        void handleRead() override {
-            std::cout << "[Handler " << name_ << "] handleRead() called" << std::endl;
-        }
-
-    private:
-        int id_;
-        std::string name_;
-};
 
 int main() {
     Reactor reactor;
 
-    auto h1 = std::make_shared<MockConnectionHandler>(1, "A");
-    auto h2 = std::make_shared<MockConnectionHandler>(2, "B");
+    int listenFd = socket(AF_INET, SOCK_STREAM, 0);
+    if (listenFd < 0) {
+        perror("socket");
+        return 1;
+    }
 
-    reactor.registerHandler(h1, true, false);
-    reactor.registerHandler(h2, true, false);
+    int opt = 1;
+    setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(9000);
 
-    std::cout << "\n--- Simulating Reactor loop ---" << std::endl;
-    reactor.handleEvents();
-    reactor.handleEvents();
+    if (bind(listenFd, (sockaddr*)&addr, sizeof(addr)) < 0) {
+        perror("bind");
+        return 1;
+    }
 
-    reactor.removeHandler(1);
-    std::cout << "\n--- After removing handler 1 <<<" << std::endl;
-    reactor.handleEvents();
+    if (listen(listenFd, 128) < 0) {
+        perror("listen");
+        return 1;
+    }
+
+    std::cout << "[Main] Listening on port 9000 ..." << std::endl;
+
+    int flags = fcntl(listenFd, F_GETFL, 0);
+    fcntl(listenFd, F_SETFL, flags | O_NONBLOCK);
+
+    auto acceptor = std::make_shared<AcceptorHandler>(listenFd, &reactor);
+    reactor.registerHandler(acceptor);
+
+    reactor.eventLoop();
+
+    return 0;
 };
