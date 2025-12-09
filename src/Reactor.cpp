@@ -1,54 +1,56 @@
 #include <algorithm>
 #include <iostream>
 #include <vector>
+#include <unistd.h>
 #include "Reactor.hpp"
 
 void Reactor::registerHandler(EventHandlerPtr handler) {
-    handlers_[handler->getHandle()] = handler;
-    std::cout << "[Reactor] Registered handler with id=" << handler->getHandle() << std::endl;
+    int fd = handler->getHandle();
+    handlers_[fd] = handler;
+
+    struct pollfd pfd {};
+    pfd.fd = fd;
+    pfd.events = POLLIN;
+
+    pollfds_.push_back(pfd);
+
+    std::cout << "[Reactor] Registered fd=" << fd << std::endl;
 };
 
-void Reactor::removeHandler(int handle) {
-    handlers_.erase(handle);
-    std::cout << "[Reactor] Removed handler id=" << handle << std::endl;
+void Reactor::removeHandler(int fd) {
+    handlers_.erase(fd);
+
+    // Remove from pollfds_
+    for (auto it = pollfds_.begin(); it != pollfds_.end(); ++it) {
+        if (it->fd == fd) {
+            pollfds_.erase(it);
+            break;
+        }
+    }
+
+    std::cout << "[Reactor] Removed fd=" << fd << std::endl;
+    close(fd);
 };
 
 void Reactor::eventLoop() {
     while (true) {
-        fd_set readset;
-        FD_ZERO(&readset);
-
-        int maxfd = 0;
-
-        for (auto &p : handlers_) {
-            int fd = p.first;
-            FD_SET(fd,  &readset);
-            maxfd = std::max(maxfd, fd);
-        }
-
-        int ready = select(maxfd + 1, &readset, nullptr, nullptr, nullptr);
+        int ready = poll(pollfds_.data(), pollfds_.size(), -1);
         if (ready < 0) {
-            perror("select");
+            perror("poll");
             continue;
         }
 
-        handleEvents(readset);
+        handleEvents();
     }
 };
 
-void Reactor::handleEvents(fd_set& readset) {
-    std::vector<int> readyFds;
-
-    for (auto& p : handlers_) {
-        int fd = p.first;
-        if (FD_ISSET(fd, &readset)) {
-            readyFds.push_back(fd);
-        }
-    }
-
-    for (int fd : readyFds) {
-        if (handlers_.count(fd)) {
-            handlers_[fd]->handleRead();
+void Reactor::handleEvents() {
+    for (auto& pfd : pollfds_) {
+        if (pfd.revents & POLLIN) {
+            int fd = pfd.fd;
+            if (handlers_.count(fd)) {
+                handlers_[fd]->handleRead();
+            }
         }
     }
 };
