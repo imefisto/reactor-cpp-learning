@@ -15,7 +15,6 @@ class Reactor {
         void registerHandler(EventHandlerPtr handler);
         void removeHandler(int handle);
         void eventLoop();
-        void handleEvents(int fd);
     private:
         int epollFd_;
         HandlerMap handlers_;

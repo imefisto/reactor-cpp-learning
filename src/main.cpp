@@ -9,7 +9,7 @@
 int main() {
     Reactor reactor;
 
-    int listenFd = socket(AF_INET, SOCK_STREAM, 0);
+    int listenFd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (listenFd < 0) {
         perror("socket");
         return 1;
@@ -17,6 +17,7 @@ int main() {
 
     int opt = 1;
     setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
@@ -34,8 +35,8 @@ int main() {
 
     std::cout << "[Main] Listening on port 9000 ..." << std::endl;
 
-    int flags = fcntl(listenFd, F_GETFL, 0);
-    fcntl(listenFd, F_SETFL, flags | O_NONBLOCK);
+    // int flags = fcntl(listenFd, F_GETFL, 0);
+    // fcntl(listenFd, F_SETFL, flags | O_NONBLOCK);
 
     auto acceptor = std::make_shared<AcceptorHandler>(listenFd, &reactor);
     reactor.registerHandler(acceptor);
