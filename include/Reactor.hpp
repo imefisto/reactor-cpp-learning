@@ -25,14 +25,9 @@ class Reactor {
         HandlerMap handlers_;
         TimerMap timers_;
         int nextTimerId_ = 0;
+        int computeNextTimerTimeout();
         void processTimers();
-        uint64_t nowMs()
-        {
-            using namespace std::chrono;
-            return duration_cast<milliseconds>(
-                    steady_clock::now().time_since_epoch()
-                    ).count();
-        }
+        uint64_t nowMs();
 };
 
 #endif

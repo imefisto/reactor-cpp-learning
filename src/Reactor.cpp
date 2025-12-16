@@ -45,13 +45,7 @@ void Reactor::eventLoop() {
     struct epoll_event events[MAX_EVENTS];
 
     while (true) {
-        int timeout = -1;
-
-        if (!timers_.empty()) {
-            uint64_t nextExpire = timers_.begin()->first;
-            uint64_t now = nowMs();
-            timeout = nextExpire > now ? (nextExpire - now) : 0;
-        }
+        int timeout = computeNextTimerTimeout();
 
         int n = epoll_wait(epollFd_, events, MAX_EVENTS, timeout);
         if (n < 0) {
@@ -94,6 +88,19 @@ int Reactor::addTimer(uint64_t ms, bool recurring, std::function<void()> cb)
     return t.id;
 };
 
+int Reactor::computeNextTimerTimeout()
+{
+    int timeout = -1;
+
+    if (!timers_.empty()) {
+        uint64_t nextExpire = timers_.begin()->first;
+        uint64_t now = nowMs();
+        timeout = nextExpire > now ? (nextExpire - now) : 0;
+    }
+
+    return timeout;
+};
+
 void Reactor::processTimers()
 {
     uint64_t now = nowMs();
@@ -118,3 +125,11 @@ void Reactor::processTimers()
         }
     }
 };
+
+uint64_t Reactor::nowMs()
+{
+    using namespace std::chrono;
+    return duration_cast<milliseconds>(
+            steady_clock::now().time_since_epoch()
+            ).count();
+}
