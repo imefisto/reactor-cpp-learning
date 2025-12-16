@@ -41,6 +41,10 @@ int main() {
     auto acceptor = std::make_shared<AcceptorHandler>(listenFd, &reactor);
     reactor.registerHandler(acceptor);
 
+    reactor.addTimer(1000, true, []() {
+            std::cout << "Timer every 1s" << std::endl;
+            });
+
     reactor.eventLoop();
 
     return 0;

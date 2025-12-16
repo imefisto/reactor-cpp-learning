@@ -45,7 +45,15 @@ void Reactor::eventLoop() {
     struct epoll_event events[MAX_EVENTS];
 
     while (true) {
-        int n = epoll_wait(epollFd_, events, MAX_EVENTS, -1);
+        int timeout = -1;
+
+        if (!timers_.empty()) {
+            uint64_t nextExpire = timers_.begin()->first;
+            uint64_t now = nowMs();
+            timeout = nextExpire > now ? (nextExpire - now) : 0;
+        }
+
+        int n = epoll_wait(epollFd_, events, MAX_EVENTS, timeout);
         if (n < 0) {
             perror("epoll_wait");
             continue;
@@ -68,6 +76,44 @@ void Reactor::eventLoop() {
             if (events[i].events & (EPOLLHUP | EPOLLERR)) {
                 std::cout << "[Reactor] HUP/ERR fd=" << fd << std::endl;
                 removeHandler(fd);
+            }
+        }
+        
+        processTimers();
+    }
+};
+
+int Reactor::addTimer(uint64_t ms, bool recurring, std::function<void()> cb)
+{
+    Timer t;
+    t.id = nextTimerId_ ++;
+    t.expiresAt = nowMs() + ms;
+    t.interval = recurring ? ms : 0;
+    t.callback = std::move(cb);
+    timers_[t.expiresAt].push_back(t);
+    return t.id;
+};
+
+void Reactor::processTimers()
+{
+    uint64_t now = nowMs();
+
+    while (!timers_.empty()) {
+        auto it = timers_.begin();
+
+        if (it->first > now) {
+            break;
+        }
+
+        auto dueTimers = it->second;
+        timers_.erase(it);
+
+        for (auto& t : dueTimers) {
+            t.callback();
+
+            if (t.interval > 0) {
+                t.expiresAt = now + t.interval;
+                timers_[t.expiresAt].push_back(t);
             }
         }
     }
