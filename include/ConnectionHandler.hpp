@@ -3,8 +3,10 @@
 
 #include "EventHandler.hpp"
 #include "Reactor.hpp"
+#include <memory>
 
-class ConnectionHandler : public EventHandler {
+class ConnectionHandler : public EventHandler,
+                          public std::enable_shared_from_this<ConnectionHandler> {
     public:
         ConnectionHandler(int fd, Reactor* reactor)
             : fd_(fd), reactor_(reactor) {}

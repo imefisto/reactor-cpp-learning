@@ -38,12 +38,19 @@ void ConnectionHandler::handleRead() {
 
 void ConnectionHandler::scheduleTask(std::string message)
 {
+    // Capture shared_from_this() to keep the handler alive during async operation
+    // This prevents use-after-free if the connection is closed before the task completes
+    auto self = shared_from_this();
+    int fd = fd_; // Capture fd by value
+
     reactor_->submitTask(
             [message]() {
             return "Async " + message;
             },
-            [this] (std::string response) {
-                send(fd_, response.c_str(), response.length(), 0); // echo
+            [self, fd] (std::string response) {
+                // Verify the connection is still valid before sending
+                // The fd might be closed if the client disconnected
+                send(fd, response.c_str(), response.length(), 0);
             }
             );
 };

@@ -31,6 +31,7 @@ class Reactor {
                 Task task;
                 task.fn = [taskFn, continuation, this]() {
                     auto result = taskFn();
+                    std::lock_guard<std::mutex> lock(completedMtx_);
                     completed_.push([result, continuation]() {
                             continuation(result);
                             });
