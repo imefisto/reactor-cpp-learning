@@ -17,6 +17,7 @@ class ConnectionHandler : public EventHandler {
         int fd_;
         int totalBytesRead_ = 0;
         Reactor* reactor_;
+        void scheduleTask(std::string message);
 };
 
 #endif

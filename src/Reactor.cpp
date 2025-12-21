@@ -4,18 +4,28 @@
 #include <unistd.h>
 #include "Reactor.hpp"
 
-Reactor::Reactor() {
+Reactor::Reactor()
+: workerPool_(2) {
     epollFd_ = epoll_create1(0);
+    eventFd_ = eventfd(0, EFD_NONBLOCK);
     if (epollFd_ < 0) {
         perror("epoll_create1");
         exit(1);
     }
+
+    registerEpollEvent(eventFd_);
 };
 
 void Reactor::registerHandler(EventHandlerPtr handler) {
     int fd = handler->getHandle();
     handlers_[fd] = handler;
 
+    registerEpollEvent(fd);
+    std::cout << "[Reactor] Registered fd=" << fd << std::endl;
+};
+
+void Reactor::registerEpollEvent(int fd)
+{
     struct epoll_event ev {};
     ev.data.fd = fd;
     ev.events = EPOLLIN | EPOLLET;
@@ -24,8 +34,6 @@ void Reactor::registerHandler(EventHandlerPtr handler) {
         perror("epoll_ctl ADD");
         exit(1);
     }
-
-    std::cout << "[Reactor] Registered fd=" << fd << std::endl;
 };
 
 void Reactor::removeHandler(int fd) {
@@ -55,6 +63,12 @@ void Reactor::eventLoop() {
 
         for (int i = 0; i < n; i++) {
             int fd = events[i].data.fd;
+
+            if (fd == eventFd_) {
+                uint64_t val;
+                read(eventFd_, &val, sizeof(val));
+                processCompletedTasks();
+            }
 
             // fd might be removed
             if (!handlers_.count(fd)) continue;
@@ -99,6 +113,20 @@ int Reactor::computeNextTimerTimeout()
     }
 
     return timeout;
+};
+
+void Reactor::processCompletedTasks()
+{
+    std::queue<std::function<void()>> q;
+    {
+        std::lock_guard<std::mutex> lock(completedMtx_);
+        std::swap(q, completed_);
+    }
+
+    while (!q.empty()) {
+        q.front()();
+        q.pop();
+    }
 };
 
 void Reactor::processTimers()
